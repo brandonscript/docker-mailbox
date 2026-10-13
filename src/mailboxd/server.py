@@ -84,9 +84,9 @@ _MCP_RAW_PATH_WITH_TRAILING_SLASH = _MCP_PATH_WITH_TRAILING_SLASH.encode("ascii"
 
 
 def _bearer_ok(cfg: Config, scope: Scope) -> bool:
-    """Constant-time bearer check against scope headers. True if disabled or valid."""
+    """Constant-time bearer check. Empty token lists deny all protected requests."""
     if not cfg.auth.tokens:
-        return True
+        return False
     import hmac
 
     for k, v in scope.get("headers", []):

@@ -12,7 +12,7 @@
 git clone https://github.com/psyb0t/docker-mailbox
 cd docker-mailbox
 cp config.example.yaml config.yaml
-# Edit config.yaml — add your mailboxes and (optionally) auth.tokens
+# Edit config.yaml: add your mailboxes and a fresh bearer token from openssl rand -hex 32.
 ```
 
 Then either:
@@ -43,7 +43,7 @@ One YAML file. Lives at `MAILBOXD_CONFIG`, or `--config`, or `/etc/mailboxd/conf
 ```yaml
 log_level: INFO
 
-# Bearer-token gate. Guards the HTTP API AND /mcp. Empty / missing = no auth.
+# Bearer-token gate. Guards the HTTP API AND /mcp. Empty / missing denies access.
 # Multi-token list = rotate without downtime: add a new one, swap clients
 # over, retire the old one.
 auth:
@@ -108,7 +108,7 @@ That's it. One port, one process, two surfaces sharing the same bearer-auth gate
 
 ## Auth
 
-When `auth.tokens` is configured, every request except `GET /health` must carry:
+Every request except `GET /health` must carry a token from `auth.tokens`:
 
 ```
 Authorization: Bearer <one of auth.tokens>
@@ -119,7 +119,7 @@ Authorization: Bearer <one of auth.tokens>
 - The same gate covers `/mcp` — there's no second auth system to learn.
 - Multiple tokens in the list let you rotate without downtime: add the new one, switch clients over, remove the old one.
 
-When `auth.tokens` is empty / omitted, all endpoints are open. Fine for "this is bound to `127.0.0.1` and there's a reverse proxy in front." Catastrophic otherwise.
+When `auth.tokens` is empty or omitted, protected requests return `401`; only `/health` remains available. Add a token and restart to use the API or MCP. Every configured token accesses every mailbox. Use separate instances and credentials when different users need isolated mailbox access.
 
 ## Management
 

@@ -1,6 +1,6 @@
 [project]
 name = "mailboxd"
-version = "0.4.16"
+version = "0.5.0"
 description = "Multi-mailbox IMAP/SMTP/POP3 control plane — HTTP API + MCP server."
 readme = "README.md"
 license = { text = "WTFPL" }
@@ -34,6 +34,7 @@ dependencies = [
     "pyyaml==6.0.3",
     "mcp==1.28.1",
     "html2text==2024.2.26",
+    "pyjwt==2.15.1",
 ]
 
 [project.urls]
@@ -66,9 +67,8 @@ packages = ["src/mailboxd"]
 
 [tool.uv]
 # Supply-chain defense: only install pkg versions older than `exclude-newer`.
-# Bumped automatically by `make pkg-*` targets; do not hand-edit unless you
-# know what you're doing. Date is interpreted as UTC midnight of that day.
-exclude-newer = "2026-08-21T00:00:00Z"
+# Refreshed by make pkg-* to UTC midnight seven days before the operation.
+exclude-newer = "2026-10-06T00:00:00Z"
 
 [tool.isort]
 profile = "black"

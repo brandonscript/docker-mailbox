@@ -63,7 +63,7 @@ class MailboxConfig(BaseModel):
 
 
 class AuthConfig(BaseModel):
-    """Bearer-token auth. Empty `tokens` list disables auth entirely."""
+    """Bearer-token auth. Empty token lists deny access to protected endpoints."""
 
     tokens: list[str] = Field(default_factory=list)
 

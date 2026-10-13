@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.5.0
+
+- Empty or omitted `auth.tokens` now denies protected HTTP and MCP requests instead of admitting anonymous access. `/health` remains public. Configure a bearer token and restart instances that previously ran without one.
+- The standalone CLI now binds loopback by default. Set `--host 0.0.0.0` explicitly for network access. Container listeners remain available through published ports with bearer authentication.
+- Pin PyJWT 2.15.1 to fix the reported dependency advisories. Dependency operations enforce a seven-day release-age cutoff.
+- Close IMAP connections after login or TLS setup failures and report logout failures without logging credentials. Unified search no longer depends on a runtime assertion.
+- Added HTTP, MCP, and real-network regression tests for authentication, mailbox selection, and credential forwarding. Configured tokens retain shared access to all mailboxes.
+- Updated configuration examples, agent setup, and plugin metadata to require bearer credentials.
+- Runtime version output now comes from installed package metadata.
+
 ## v0.4.16
 
 Documentation only. The README's agent integrations section names [peen](https://github.com/psyb0t/peen) as an example of an agent that reads `.agents/skills/`.

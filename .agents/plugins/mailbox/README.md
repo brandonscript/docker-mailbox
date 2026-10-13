@@ -8,7 +8,7 @@ docker-mailbox already serves a Streamable-HTTP MCP endpoint at `/mcp`. This
 package is a thin stdio↔HTTP bridge (via
 [`mcp-remote`](https://www.npmjs.com/package/mcp-remote)) for MCP clients that
 speak local stdio servers — it forwards everything to your running mailboxd
-instance and authenticates with your bearer token when the server requires one.
+instance and authenticates with your configured bearer token.
 
 > docker-mailbox is **self-hosted**. This plugin does not ship a mail server —
 > it connects to a mailboxd instance that **you** run. See the
@@ -29,7 +29,7 @@ tool catalog stays constant-sized no matter how many mailboxes are configured.
 | Env var | Required | Description |
 |---|---|---|
 | `MAILBOX_URL` | yes | Base URL of your running mailboxd server, e.g. `http://localhost:8000`. The bridge appends `/mcp`. |
-| `MAILBOX_TOKEN` | no | Bearer token — only if the mailboxd server was started with `auth.tokens` configured. |
+| `MAILBOX_TOKEN` | yes | Bearer token matching an entry in the server's `auth.tokens`. |
 
 ## Install
 
@@ -39,7 +39,7 @@ Install it into your OpenClaw agent from ClawHub:
 openclaw plugins install clawhub:@psyb0t/mailbox
 ```
 
-Then set `MAILBOX_URL` (and `MAILBOX_TOKEN` if your server uses auth) in
+Then set `MAILBOX_URL` and `MAILBOX_TOKEN` in
 the plugin's environment.
 
 ## Native remote MCP (no install)

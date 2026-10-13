@@ -1,7 +1,6 @@
 """Bearer-token auth shared by the HTTP API and the streamable-HTTP MCP server.
 
-An empty `cfg.auth.tokens` list disables auth (everything 200s). Once any
-token is configured, every request to a protected endpoint must carry
+An empty `cfg.auth.tokens` list denies access. Every request to a protected endpoint must carry
 `Authorization: Bearer <token>` matching one of the configured tokens
 (constant-time compared). 401 responses include `WWW-Authenticate: Bearer`.
 """
@@ -29,10 +28,8 @@ def _extract_token(request: Request) -> str | None:
 def check_bearer(auth_cfg: AuthConfig, request: Request) -> None:
     """Validate the Authorization header against the configured token set.
 
-    No-op when no tokens are configured. Raises 401 otherwise.
+    Raises 401 for missing, invalid, or unconfigured credentials.
     """
-    if not auth_cfg.tokens:
-        return
     presented = _extract_token(request)
     if presented is None:
         raise HTTPException(

@@ -25,11 +25,13 @@ mailboxes:
     return p
 
 
-def test_no_tokens_means_no_auth(tmp_path: Path) -> None:
+def test_no_tokens_denies_protected_endpoints(tmp_path: Path) -> None:
     cfg_path = _write_cfg(tmp_path, [])
     c = TestClient(create_app(load_config(str(cfg_path))))
     assert c.get("/health").status_code == 200
-    assert c.get("/mailboxes").status_code == 200
+    r = c.get("/mailboxes")
+    assert r.status_code == 401
+    assert r.headers["www-authenticate"] == "Bearer"
 
 
 def test_health_is_always_exempt(tmp_path: Path) -> None:

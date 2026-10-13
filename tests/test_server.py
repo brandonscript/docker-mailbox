@@ -10,6 +10,8 @@ from mailboxd.server import create_app
 def _client(tmp_path: Path) -> TestClient:
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text("""
+auth:
+  tokens: [EXAMPLE-DO-NOT-USE]
 mailboxes:
   - name: alpha
     description: "imap+smtp test mailbox"
@@ -19,7 +21,7 @@ mailboxes:
     smtp: {host: smtp.example.com, username: u, password: p, from_address: u@example.com}
 """)
     app = create_app(load_config(str(cfg_path)))
-    return TestClient(app)
+    return TestClient(app, headers={"Authorization": "Bearer EXAMPLE-DO-NOT-USE"})
 
 
 def test_health(tmp_path: Path) -> None:

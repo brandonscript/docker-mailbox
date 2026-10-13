@@ -9,9 +9,9 @@
 
 log_level: INFO
 
-# Bearer-token auth — applies to ALL non-/health endpoints (HTTP API + the
-# /mcp streamable-HTTP transport). Leave `tokens` empty / omit the block to
-# disable auth entirely.
+# Bearer-token auth applies to all non-/health endpoints, including /mcp.
+# Empty / omitted tokens deny access. Generate a token with openssl rand -hex 32.
+# Every configured token can access every mailbox in this instance.
 auth:
   tokens:
     - "replace-with-a-long-random-token"

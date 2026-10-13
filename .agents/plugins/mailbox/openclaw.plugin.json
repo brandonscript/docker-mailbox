@@ -18,13 +18,13 @@
       "description": "Base URL of your running mailboxd server, e.g. http://localhost:8000 (the bridge appends /mcp)."
     },
     "MAILBOX_TOKEN": {
-      "required": false,
-      "description": "Bearer token, only if the mailboxd server was started with auth.tokens configured."
+      "required": true,
+      "description": "Bearer token matching the server's auth.tokens."
     }
   },
   "configSchema": {
     "type": "object",
-    "required": ["url"],
+    "required": ["url", "token"],
     "properties": {
       "url": {
         "type": "string",
@@ -32,7 +32,7 @@
       },
       "token": {
         "type": "string",
-        "description": "Bearer token, only if the mailboxd server was started with auth.tokens configured."
+        "description": "Bearer token matching the server's auth.tokens."
       }
     }
   }

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import email
 import imaplib
+import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
@@ -21,6 +22,8 @@ from typing import Any, Iterator
 import html2text
 
 from .config import ImapConfig, MailboxConfig
+
+log = logging.getLogger(__name__)
 
 
 def _html_to_reader(html: str) -> str:
@@ -76,19 +79,25 @@ def _connect(cfg: ImapConfig) -> Iterator[imaplib.IMAP4]:
         conn: imaplib.IMAP4 = imaplib.IMAP4_SSL(cfg.host, cfg.port)
     else:
         conn = imaplib.IMAP4(cfg.host, cfg.port)
+    try:
         if cfg.tls == "starttls":
             conn.starttls()
-    try:
-        conn.login(cfg.username, cfg.password)
-    except imaplib.IMAP4.error as e:
-        raise ImapError(f"login failed: {e}") from e
-    try:
+        try:
+            conn.login(cfg.username, cfg.password)
+        except imaplib.IMAP4.error as e:
+            raise ImapError(f"login failed: {e}") from e
         yield conn
     finally:
         try:
             conn.logout()
-        except Exception:
-            pass
+        except (imaplib.IMAP4.error, OSError) as error:
+            log.warning("IMAP logout failed", extra={"error_type": type(error).__name__})
+            try:
+                conn.shutdown()
+            except OSError as close_error:
+                log.warning(
+                    "IMAP socket close failed", extra={"error_type": type(close_error).__name__}
+                )
 
 
 def _decode(s: Any) -> str:
@@ -442,14 +451,16 @@ def unified_search(
         return {"messages": [], "errors": []}
 
     def _one(mb: MailboxConfig) -> tuple[str, list[dict[str, Any]], str | None]:
-        assert mb.imap is not None
+        imap = mb.imap
+        if imap is None:
+            return mb.name, [], "IMAP not configured"
         try:
-            msgs = search_messages(mb.imap, folder=folder, limit=limit, **criteria)
+            msgs = search_messages(imap, folder=folder, limit=limit, **criteria)
         except (ImapError, OSError) as e:
             return mb.name, [], str(e)
         for m in msgs:
             m["mailbox"] = mb.name
-            m["mailbox_address"] = mb.imap.username
+            m["mailbox_address"] = imap.username
         return mb.name, msgs, None
 
     merged: list[dict[str, Any]] = []

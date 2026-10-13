@@ -1,7 +1,7 @@
 ---
 name: docker-mailbox
-description: Multi-mailbox IMAP/SMTP control plane exposed as a REST API + MCP server (streamable HTTP) on a single port. Read, search, send, mark-seen, and delete mail across multiple inboxes in one call — `GET /inbox` fans out across every IMAP account in parallel and returns a merged, newest-first feed. Use when you need an agent (or a script, or a curl one-liner) to drive one or more real mail accounts without standing up a webmail UI, a message store, or any per-provider client library. Stdlib `imaplib`/`smtplib` under the hood, FastAPI on top, bearer-token auth optional.
-compatibility: Requires curl and a running mailboxd instance. MAILBOX_URL env var must be set. MAILBOX_TOKEN is optional — only needed if the server was started with `auth.tokens` configured.
+description: "Use docker-mailbox over REST or MCP to read, search, send, mark seen, and delete mail across configured inboxes. Use when an agent needs to operate a running mailboxd service. Requires a configured bearer token; deletion needs explicit user confirmation."
+compatibility: Requires curl, a running mailboxd instance, MAILBOX_URL, and MAILBOX_TOKEN matching the server's auth.tokens.
 metadata:
   author: psyb0t
   homepage: https://github.com/psyb0t/docker-mailbox
@@ -18,16 +18,16 @@ For installation and setup, see [references/setup.md](references/setup.md).
 ## Security & safety
 
 - **Deleting mail is permanent** — the delete endpoint flags a message `\Deleted` and `EXPUNGE`s it immediately (no trash bin, no undo). Only delete specific message UIDs the user has confirmed; never bulk-delete straight from a broad `/inbox` or `/search` result — list first, show what matched, confirm, then delete. On a multi-mailbox instance, always confirm which `mailbox`/UID you're targeting so you don't touch the wrong account.
-- **No auth when `auth.tokens` is empty.** With it unset the HTTP API AND `/mcp` are UNAUTHENTICATED — anyone who can reach the port gets full read/send/delete access to every configured mailbox. NEVER expose such an instance on a network or to untrusted agents; set `auth.tokens` and bind to loopback / behind an authenticating proxy.
+- **Bearer auth is required.** Empty or missing `auth.tokens` denies protected requests. Every configured token accesses every mailbox; use separate instances for users who need isolated access.
 - **Every call sends your mail data to whatever `MAILBOX_URL` points at.** Point it only at a `mailboxd` instance you run or explicitly trust; prefer HTTPS if it's reachable over a network.
 
 ## Setup
 
-The API should already be running. Set the base URL and (if configured) the bearer token:
+The API should already be running. Set the base URL and configured bearer token:
 
 ```bash
 export MAILBOX_URL=http://localhost:8000
-export MAILBOX_TOKEN=your_token_here   # omit if auth.tokens is empty in config
+export MAILBOX_TOKEN=your-token-here
 ```
 
 **Verify:**
@@ -41,7 +41,7 @@ curl -s -H "Authorization: Bearer $MAILBOX_TOKEN" $MAILBOX_URL/mailboxes | jq
 
 `/health` is **always open** — point liveness probes at it without worrying about auth.
 
-Auth is optional. If `auth.tokens` is empty/missing in the server config, all endpoints are open. If it's set, every non-`/health` request needs `Authorization: Bearer <one of auth.tokens>` and returns `401` (with `WWW-Authenticate: Bearer`) on miss. Tokens are constant-time compared. The same gate covers `/mcp`.
+Every non-`/health` request needs `Authorization: Bearer <one of auth.tokens>`. Missing, invalid, or unconfigured credentials return `401` with `WWW-Authenticate: Bearer`. Empty token lists deny access. Tokens are constant-time compared. The same gate covers `/mcp`.
 
 ## How It Works
 
@@ -57,7 +57,7 @@ Status codes:
 
 | Status | When                                                                                       |
 | ------ | ------------------------------------------------------------------------------------------ |
-| `401`  | Missing or invalid bearer (when auth is on).                                                |
+| `401`  | Missing or invalid bearer, or no server tokens configured. |
 | `404`  | Unknown mailbox name in the URL.                                                            |
 | `409`  | Mailbox doesn't have the requested protocol (IMAP endpoint on an SMTP-only mailbox).        |
 | `422`  | Request body validation failed (pydantic).                                                  |
@@ -282,7 +282,7 @@ There is **no stdio transport**. Point MCP clients at `$MAILBOX_URL/mcp`. The en
 }
 ```
 
-Drop the `headers` block if you're running without `auth.tokens`.
+Keep the `headers` block and use a token from the server's `auth.tokens`.
 
 ## Common Workflows
 

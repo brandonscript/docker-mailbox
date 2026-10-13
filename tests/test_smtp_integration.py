@@ -123,6 +123,8 @@ def smtp_sink() -> Any:
 def _client(tmp_path: Path, host: str, port: int) -> TestClient:
     cfg = tmp_path / "config.yaml"
     cfg.write_text(f"""
+auth:
+  tokens: [EXAMPLE-DO-NOT-USE]
 mailboxes:
   - name: sink
     smtp:
@@ -133,7 +135,10 @@ mailboxes:
       password: ""
       from_address: "sender@example.com"
 """)
-    return TestClient(create_app(load_config(str(cfg))))
+    return TestClient(
+        create_app(load_config(str(cfg))),
+        headers={"Authorization": "Bearer EXAMPLE-DO-NOT-USE"},
+    )
 
 
 def test_send_delivers_message(smtp_sink: Any, tmp_path: Path) -> None:

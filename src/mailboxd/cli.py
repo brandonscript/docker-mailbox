@@ -19,7 +19,7 @@ def main(argv: list[str] | None = None) -> int:
         "http",
         help="Run the FastAPI HTTP server (also serves MCP under /mcp)",
     )
-    p_http.add_argument("--host", default="0.0.0.0")
+    p_http.add_argument("--host", default="127.0.0.1")
     p_http.add_argument("--port", type=int, default=8000)
     p_http.add_argument("--workers", type=int, default=int(os.environ.get("WORKERS", "1")))
     p_http.add_argument("--config", help="Path to config.yaml (overrides MAILBOXD_CONFIG)")

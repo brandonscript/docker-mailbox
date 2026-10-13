@@ -169,6 +169,8 @@ def test_mock_detects_injected_command_via_raw_imaplib(imap_factory: Factory) ->
 def _http_client(tmp_path: Path, host: str, port: int) -> TestClient:
     cfg = tmp_path / "config.yaml"
     cfg.write_text(f"""
+auth:
+  tokens: [EXAMPLE-DO-NOT-USE]
 mailboxes:
   - name: m
     imap:
@@ -181,7 +183,11 @@ mailboxes:
 """)
     from mailboxd.server import create_app
 
-    return TestClient(create_app(load_config(str(cfg))), raise_server_exceptions=False)
+    return TestClient(
+        create_app(load_config(str(cfg))),
+        raise_server_exceptions=False,
+        headers={"Authorization": "Bearer EXAMPLE-DO-NOT-USE"},
+    )
 
 
 def test_get_message_route_rejects_crlf_folder(imap_factory: Factory, tmp_path: Path) -> None:

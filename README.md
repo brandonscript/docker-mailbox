@@ -30,14 +30,14 @@ Stdlib `imaplib` + `smtplib` under the hood, FastAPI on top, official MCP Python
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | **HTTP API**    | `GET /inbox` fans out across every account at once (filter by mailbox, sender, subject, date, flags…). Per-mailbox reads + deletes. SMTP send.   |
 | **MCP server**  | Streamable-HTTP MCP at `/mcp` — same port, same bearer, same boss. A flat set of tools (`mailboxes`, `inbox`, `list_messages`, `send`, …) that take `mailbox` as a parameter. 100 accounts? Still one tool catalog. |
-| **Bearer auth** | One token list in YAML guards both the API and `/mcp`. Empty list = wide open (your problem). Multiple tokens = zero-downtime rotation.          |
+| **Bearer auth** | One token list guards the API and `/mcp`. No tokens = no access. Multiple tokens let clients switch keys before you retire the old one. |
 | **Protocols**   | IMAP (SSL / STARTTLS / plain), SMTP (SSL / STARTTLS / plain). Standards-boring on purpose.                                                       |
 | **Config**      | One YAML file. Add a mailbox, restart, done. Each one declares whichever subset of `{imap, smtp}` you actually care about.                       |
 | **State**       | None. Truly none. No DB, no queue, no cache, no "oh just this little Redis." A connection opens, does the work, closes. Next.                    |
 
 ## Quick Start
 
-1. Drop a `config.yaml` next to you (steal `config.example.yaml` if you're feeling lazy — that's what it's there for).
+1. Copy `config.example.yaml` to `config.yaml`. Add your mail credentials and replace the example bearer token with a fresh one from `openssl rand -hex 32`.
 2. Light it up:
 
 ```bash
@@ -50,7 +50,7 @@ docker run --rm \
 3. Poke it:
 
 ```bash
-# no auth? this works as-is. with auth.tokens set, add: -H "Authorization: Bearer YOUR_TOKEN"
+# Use the bearer token you put in config.yaml.
 TOKEN="paste-a-token-from-config-here"
 
 curl -s http://localhost:8000/health | jq                                               # health is always open
@@ -78,9 +78,8 @@ One YAML file. Lives at `MAILBOXD_CONFIG`, or `--config`, or `/etc/mailboxd/conf
 ```yaml
 log_level: INFO
 
-# Bearer-token gate. Guards the HTTP API AND /mcp. Empty / missing = no auth
-# (good luck out there). Multi-token list = rotate without downtime: add a
-# new one, swap clients over, retire the old one.
+# Bearer-token gate. Guards the HTTP API AND /mcp. Empty / missing denies access.
+# For rotation, add a new token, restart, swap clients over, then retire the old one.
 auth:
   tokens:
     - "long-random-token-1"
@@ -122,7 +121,7 @@ The fine print:
 
 ### Authentication
 
-If `auth.tokens` is set, **every request except `GET /health`** has to carry a bearer:
+**Every request except `GET /health`** has to carry a configured bearer:
 
 ```
 Authorization: Bearer <one of auth.tokens>
@@ -130,7 +129,9 @@ Authorization: Bearer <one of auth.tokens>
 
 No header, wrong shape, wrong value → `401` with `WWW-Authenticate: Bearer`. Tokens get a constant-time compare so you don't leak them through timing. The same gate covers `/mcp` — there's no second auth system to learn.
 
-Leave `auth.tokens` empty (or skip the block) and everything's open. Fine for "this is bound to 127.0.0.1 and there's a reverse proxy in front." Catastrophic otherwise. Your call.
+Leave `auth.tokens` empty or skip the block and every protected request gets `401`. Only `/health` stays open. Add a token and restart before using the API or MCP.
+
+Every configured token controls every configured mailbox. This is one operator's mail service, not tenant isolation. For separate users who must not share mailbox access, run separate instances with separate configs and tokens. Use HTTPS when crossing an untrusted network.
 
 ### Errors
 
@@ -138,7 +139,7 @@ Everything's JSON. Errors look like `{"detail": "..."}`:
 
 | Status | When                                                                                       |
 | ------ | ------------------------------------------------------------------------------------------ |
-| `401`  | Missing or invalid bearer (when auth is on).                                                |
+| `401`  | Missing or invalid bearer, or no server tokens configured. |
 | `404`  | Unknown mailbox name in the URL.                                                            |
 | `409`  | You're asking a mailbox for a protocol it doesn't have (IMAP endpoint on an SMTP-only one). |
 | `502`  | The IMAP / SMTP server upstream said no.                                                    |
@@ -146,7 +147,7 @@ Everything's JSON. Errors look like `{"detail": "..."}`:
 ### `GET /health`
 
 ```json
-{ "ok": true, "version": "0.4.16" }
+{ "ok": true, "version": "0.5.0" }
 ```
 
 Always open, no bearer required. Point your liveness probe at this and forget about it.
@@ -301,7 +302,7 @@ Most MCP hosts take a `.mcp.json` (or equivalent) like this:
 }
 ```
 
-Drop the `headers` block if you're running without `auth.tokens`. Keep it if you value sleep.
+Keep the `headers` block. The token must match an entry in `auth.tokens`.
 
 ## Agent integrations
 
@@ -314,7 +315,7 @@ claude plugin marketplace add psyb0t/agents
 claude plugin install mailbox@psyb0t
 ```
 
-Claude Code prompts for the mailboxd URL and, if auth is enabled, the bearer token — the token is stored in your OS keychain.
+Claude Code prompts for the mailboxd URL and bearer token. The token is stored in your OS keychain.
 
 ### Codex
 
@@ -339,7 +340,7 @@ For MCP clients that speak local stdio, the [`@psyb0t/mailbox`](.agents/plugins/
 openclaw plugins install clawhub:@psyb0t/mailbox
 ```
 
-Then set `MAILBOX_URL` (and `MAILBOX_TOKEN` if the server was started with `auth.tokens` configured).
+Then set `MAILBOX_URL` and `MAILBOX_TOKEN` to your server URL and configured bearer token.
 
 ## Architecture
 
@@ -368,6 +369,8 @@ Stateless. No DB. No queue. No cache. Connections open per request and die in a 
 
 ## Development
 
+The `mailboxd http` CLI binds `127.0.0.1` by default. Use `--host 0.0.0.0` for an explicit network listener. Docker and `make run` bind inside the container for port mapping; bearer auth remains required.
+
 ```bash
 make help          # list all targets
 make dev-image     # build the sandboxed dev container
@@ -382,7 +385,7 @@ make format        # isort + black
 
 ### Package management — supply-chain defense
 
-We use `uv`'s `exclude-newer` to refuse any package version published after a fixed cutoff. The cutoff gets **bumped to today** automatically by every `pkg-*` make target, so a freshly-published malicious release can't sneak in on the next `pkg-add`.
+We use `uv`'s `exclude-newer` to refuse package versions newer than a fixed cutoff. Dependency changes set that cutoff to UTC midnight seven days ago. `pkg-lock` keeps the existing cutoff.
 
 ```bash
 make pkg-add PKG=foo==1.2.3

@@ -26,7 +26,8 @@
     "mailbox_token": {
       "type": "string",
       "title": "mailboxd bearer token",
-      "description": "Bearer token, only needed if the server was started with auth.tokens configured (sets MAILBOX_TOKEN).",
+      "description": "Bearer token matching the server's auth.tokens (sets MAILBOX_TOKEN).",
+      "required": true,
       "sensitive": true
     }
   }
