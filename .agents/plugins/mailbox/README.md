@@ -42,6 +42,8 @@ openclaw plugins install clawhub:@psyb0t/mailbox
 Then set `MAILBOX_URL` and `MAILBOX_TOKEN` in
 the plugin's environment.
 
+For clients on the Docker host, publish mailboxd with `-p 127.0.0.1:8000:8000`. The image still listens on `0.0.0.0:8000` internally. Another container uses a shared-network URL such as `http://mailboxd:8000`; its `localhost` refers to itself. Remote clients need a deliberately reachable endpoint, preferably HTTPS, and the configured bearer token.
+
 ## Native remote MCP (no install)
 
 If your MCP client already supports **remote** Streamable-HTTP servers, you

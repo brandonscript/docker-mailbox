@@ -42,7 +42,7 @@ Stdlib `imaplib` + `smtplib` under the hood, FastAPI on top, official MCP Python
 
 ```bash
 docker run --rm \
-  -p 8000:8000 \
+  -p 127.0.0.1:8000:8000 \
   -v "$PWD/config.yaml:/etc/mailboxd/config.yaml:ro" \
   psyb0t/mailbox:latest
 ```
@@ -64,7 +64,7 @@ curl -s -H "Authorization: Bearer $TOKEN" 'http://localhost:8000/inbox?limit=5' 
 services:
   mailbox:
     image: psyb0t/mailbox:latest
-    ports: ["8000:8000"]
+    ports: ["127.0.0.1:8000:8000"]
     volumes:
       # config.yaml holds your IMAP/SMTP passwords AND your auth.tokens —
       # gitignore it, lock down its filesystem perms, treat it like an SSH key.
@@ -72,6 +72,14 @@ services:
 ```
 
 ## Configuration
+
+### Container listener and host exposure
+
+The image explicitly listens on `0.0.0.0:8000` inside the container. Keep that internal listener so Docker port forwarding and other containers can reach it. The standalone `mailboxd http` CLI defaults to `127.0.0.1`; the image's normal startup command overrides that default.
+
+Publish host-local access with `-p 127.0.0.1:8000:8000`, or `-p 127.0.0.1:9000:8000` for another local port. `-p 8000:8000` publishes on all host interfaces. Use it only for deliberate network access, with bearer auth and HTTPS where appropriate.
+
+If replacing the image command with `mailboxd http`, include `--host 0.0.0.0`. Container loopback prevents published ports from reaching the server. The checked-in Compose file currently publishes on all host interfaces; change its port entry to `127.0.0.1:${PORT:-8000}:8000` for host-local access.
 
 One YAML file. Lives at `MAILBOXD_CONFIG`, or `--config`, or `/etc/mailboxd/config.yaml` if you can't be bothered.
 
@@ -147,7 +155,7 @@ Everything's JSON. Errors look like `{"detail": "..."}`:
 ### `GET /health`
 
 ```json
-{ "ok": true, "version": "0.5.0" }
+{ "ok": true, "version": "0.5.1" }
 ```
 
 Always open, no bearer required. Point your liveness probe at this and forget about it.
@@ -369,7 +377,7 @@ Stateless. No DB. No queue. No cache. Connections open per request and die in a 
 
 ## Development
 
-The `mailboxd http` CLI binds `127.0.0.1` by default. Use `--host 0.0.0.0` for an explicit network listener. Docker and `make run` bind inside the container for port mapping; bearer auth remains required.
+The CLI defaults to loopback; Docker and `make run` explicitly listen on `0.0.0.0` inside the container. `make run` publishes on all host interfaces. Use the [host-local Docker example](#quick-start) when that is not intended. Bearer auth remains required in every mode.
 
 ```bash
 make help          # list all targets

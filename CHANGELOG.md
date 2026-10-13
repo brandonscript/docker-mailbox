@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.5.1
+
+- Clarify Docker's internal listener, the standalone CLI default, and host-side publishing. Documentation examples publish on host loopback and explain how to adjust the checked-in Compose file.
+
 ## v0.5.0
 
 - Empty or omitted `auth.tokens` now denies protected HTTP and MCP requests instead of admitting anonymous access. `/health` remains public. Configure a bearer token and restart instances that previously ran without one.

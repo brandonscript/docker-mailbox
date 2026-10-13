@@ -19,11 +19,11 @@ Then either:
 
 ```bash
 # Plain docker run
-docker run --rm -p 8000:8000 \
+docker run --rm -p 127.0.0.1:8000:8000 \
   -v "$PWD/config.yaml:/etc/mailboxd/config.yaml:ro" \
   psyb0t/mailbox:latest
 
-# Or docker compose (recommended)
+# Or edit Compose ports to 127.0.0.1:${PORT:-8000}:8000 first:
 docker compose up -d
 ```
 
@@ -104,7 +104,11 @@ Confirm with the provider's docs — these change occasionally.
 | ---- | ---------------------------------------------------------------------------------------- |
 | 8000 | HTTP API (`/health`, `/mailboxes`, `/inbox`, `/mailboxes/<name>/...`) AND MCP at `/mcp`  |
 
-That's it. One port, one process, two surfaces sharing the same bearer-auth gate. Override the host port with `-p HOST:8000` on `docker run` (or set `ports:` in compose).
+The image listens on `0.0.0.0:8000` inside the container. Keep that internal address for Docker port forwarding and shared-network clients. The standalone CLI defaults to loopback, but the image's normal startup command explicitly overrides it.
+
+Publish host-local access with `-p 127.0.0.1:8000:8000`, or `-p 127.0.0.1:9000:8000` for another local port. The checked-in Compose file currently publishes `${PORT:-8000}:8000` on all host interfaces; replace that entry with `127.0.0.1:${PORT:-8000}:8000` for local access. All-interface publishing is for deliberate remote access, with bearer auth and HTTPS where appropriate.
+
+If replacing the image command with `mailboxd http`, pass `--host 0.0.0.0`; otherwise published ports cannot reach the container's loopback listener. A proxy on the same Docker network can instead use `http://mailboxd:8000` without a host-published port.
 
 ## Auth
 

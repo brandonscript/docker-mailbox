@@ -15,6 +15,8 @@ The killer endpoint is `GET /inbox` — it hits every IMAP account in parallel, 
 
 For installation and setup, see [references/setup.md](references/setup.md).
 
+Keep Docker's internal listener on `0.0.0.0:8000` and publish host-local access with `-p 127.0.0.1:8000:8000`. The image already sets its internal address. Only a replaced startup command using `mailboxd http` needs an explicit `--host 0.0.0.0`. A client in another container uses a shared-network service URL, not `localhost`; a remote client needs a deliberately reachable, authenticated endpoint.
+
 ## Security & safety
 
 - **Deleting mail is permanent** — the delete endpoint flags a message `\Deleted` and `EXPUNGE`s it immediately (no trash bin, no undo). Only delete specific message UIDs the user has confirmed; never bulk-delete straight from a broad `/inbox` or `/search` result — list first, show what matched, confirm, then delete. On a multi-mailbox instance, always confirm which `mailbox`/UID you're targeting so you don't touch the wrong account.
@@ -34,7 +36,7 @@ export MAILBOX_TOKEN=your-token-here
 
 ```bash
 curl -s $MAILBOX_URL/health
-# {"ok": true, "version": "0.1.0"}
+# {"ok": true, "version": "0.5.1"}
 
 curl -s -H "Authorization: Bearer $MAILBOX_TOKEN" $MAILBOX_URL/mailboxes | jq
 ```
@@ -71,7 +73,7 @@ UIDs (not sequence numbers) are used for every message identifier so IDs stay st
 
 ```bash
 curl -s $MAILBOX_URL/health
-# {"ok": true, "version": "0.1.0"}
+# {"ok": true, "version": "0.5.1"}
 ```
 
 ### Mailboxes
