@@ -45,6 +45,7 @@ profile.out
 *.swo
 
 # Local scratch
+.plan/
 .research_files/
 .agent_notes/
 .agent_knowledge/
@@ -90,3 +91,6 @@ AGENTS.md
 sec.sarif
 
 .testing/
+
+# Review receipt for the local release script.
+git-update.sh.debot

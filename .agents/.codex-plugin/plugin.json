@@ -1,7 +1,7 @@
 {
   "name": "mailbox",
   "version": "0.5.1",
-  "description": "Multi-mailbox IMAP/SMTP control plane exposed as a REST API and MCP server on a single port — read, search, send, mark-seen, and delete mail across multiple inboxes.",
+  "description": "Multi-mailbox IMAP/SMTP control plane exposed as a REST API and MCP server on a single port: read, search, send, mark-seen, and delete mail across multiple inboxes.",
   "author": {
     "name": "psyb0t",
     "url": "https://github.com/psyb0t"
