@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.6.1
+
+- Tag pipelines wait for the same commit's successful `main` pipeline, then promote its multi-platform Docker image by digest instead of rebuilding or rerunning checks.
+- Main builds publish a `sha-<commit>` image alongside `latest`. GitHub releases use annotated tag notes; ClawHub and MCP publication wait for the release.
+- Limit pipeline pushes to `main` and `v*` tags, and select the mailbox skill and plugin explicitly for ClawHub publication.
+
 ## v0.6.0
 
 Added scoped tokens, IMAP drafts, replies, send limits, message analysis and durable webhook delivery. HTTP and MCP share the same permission checks and SQLite state.

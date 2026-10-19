@@ -1,9 +1,15 @@
 name: pipeline
 
-on: [push]
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions: {}
 
 jobs:
   code:
+    if: "!startsWith(github.ref, 'refs/tags/')"
     permissions:
       contents: read
       security-events: write # for the sec SARIF upload
@@ -19,14 +25,15 @@ jobs:
       sarif_category: "python" # distinct from the docker image's Grype SARIF category
 
   badges:
-    needs: [code]
-    if: github.ref_name == github.event.repository.default_branch || startsWith(github.ref, 'refs/tags/')
+    needs: [code, wait]
+    if: "always() && ((github.ref_name == github.event.repository.default_branch && needs.code.result == 'success') || (startsWith(github.ref, 'refs/tags/') && needs.wait.result == 'success'))"
     permissions:
       contents: write
     uses: psyb0t/reusable-github-workflows/.github/workflows/create-badges.yml@master
 
   call-docker-image-workflow:
     needs: [code]
+    if: "!startsWith(github.ref, 'refs/tags/')"
     permissions:
       contents: write # GitHub Release
       security-events: write # upload the Grype SARIF to the Security tab
@@ -35,28 +42,60 @@ jobs:
     with:
       repository_name: psyb0t/mailbox
       target_platforms: "linux/amd64,linux/arm64"
+      push_sha_tag: true
       scan_severity: "high"
-      # Report scan findings to the Security tab but don't fail the run, so the
-      # clawhub publish job below can depend on this workflow succeeding.
+      # Report image findings without failing publication.
       scan_fail_build: false
 
     secrets:
       dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
       dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
 
-  # Publish the skills under .agents/skills/ to ClawHub. Tag pushes ONLY, and
-  # only after the Docker image build/push + GitHub release have succeeded
-  # (needs the docker-image workflow, which does both).
-  publish-to-clawhub:
-    needs: [call-docker-image-workflow]
+  wait:
     if: startsWith(github.ref, 'refs/tags/')
-    uses: psyb0t/reusable-github-workflows/.github/workflows/clawhub-publish.yml@master
+    permissions:
+      actions: read
+    uses: psyb0t/reusable-github-workflows/.github/workflows/wait-for-default-branch.yml@master
 
+  docker-promote:
+    needs: [wait]
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+      security-events: write
+    uses: psyb0t/reusable-github-workflows/.github/workflows/docker-image-workflow.yml@master
+    with:
+      repository_name: psyb0t/mailbox
+      target_platforms: "linux/amd64,linux/arm64"
+      promote_on_tag: true
+      create_release: false
+      scan_severity: "high"
+      scan_fail_build: false
+    secrets:
+      dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
+      dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  release:
+    needs: [docker-promote]
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    uses: psyb0t/reusable-github-workflows/.github/workflows/release-workflow.yml@master
+
+  publish-to-clawhub:
+    needs: [release]
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: read
+    uses: psyb0t/reusable-github-workflows/.github/workflows/clawhub-publish.yml@master
+    with:
+      skill_names: '["docker-mailbox"]'
+      plugin_names: '["mailbox"]'
     secrets:
       clawhub_token: ${{ secrets.CLAWHUB_TOKEN }}
 
   publish-to-mcp-registry:
-    needs: [call-docker-image-workflow]
+    needs: [release]
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
       id-token: write

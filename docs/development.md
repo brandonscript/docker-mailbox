@@ -54,5 +54,11 @@ make pkg-upgrade
 
 Don't hand-edit `[tool.uv].exclude-newer`. Let the targets do it.
 
+## Release pipeline
+
+Push release commits to `main` before creating their annotated `v*` tags. The main pipeline runs checks and publishes `psyb0t/mailbox:latest` plus `psyb0t/mailbox:sha-<commit>`. Tag pipelines wait for the same commit's main pipeline to succeed, then promote that image to the release tag without rebuilding or rerunning checks. Every platform keeps the digest built on main.
+
+The wait fails if the main run fails, never appears or exceeds its timeout. After promotion, a separate job creates the GitHub release from the annotated tag notes. ClawHub and MCP publication depend on that release. Existing published tags are not changed.
+
 
 [Project overview](../README.md)
