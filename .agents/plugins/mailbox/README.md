@@ -1,28 +1,14 @@
 # @psyb0t/mailbox
 
-An OpenClaw/MCP plugin that connects your agent to a self-hosted
-[docker-mailbox](https://github.com/psyb0t/docker-mailbox) IMAP/SMTP control
-plane over the [Model Context Protocol](https://modelcontextprotocol.io).
+Connect an OpenClaw agent or local MCP client to a running [docker-mailbox](https://github.com/psyb0t/docker-mailbox) service.
 
-docker-mailbox already serves a Streamable-HTTP MCP endpoint at `/mcp`. This
-package is a thin stdio↔HTTP bridge (via
-[`mcp-remote`](https://www.npmjs.com/package/mcp-remote)) for MCP clients that
-speak local stdio servers — it forwards everything to your running mailboxd
-instance and authenticates with your configured bearer token.
+This package uses [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) to bridge local stdio clients to mailboxd's streamable HTTP endpoint at `/mcp`. It authenticates with your configured bearer token.
 
-> docker-mailbox is **self-hosted**. This plugin does not ship a mail server —
-> it connects to a mailboxd instance that **you** run. See the
-> [docker-mailbox repo](https://github.com/psyb0t/docker-mailbox) to stand one up.
+Run mailboxd yourself before connecting the plugin. See the [setup guide](https://github.com/psyb0t/docker-mailbox#quick-start).
 
 ## Tools
 
-The docker-mailbox MCP tools become available to your agent: `mailboxes`
-(discovery), `inbox` (unified newest-first read across every configured IMAP
-mailbox), `list_folders`, `list_messages`, `search` (structured single-mailbox
-search), `get_message` (with optional `reader` mode — HTML stripped to clean
-markdown), `delete_message`, `mark_seen`, and `send`. Every per-mailbox tool
-takes a `mailbox` argument (the configured name or its email address), so the
-tool catalog stays constant-sized no matter how many mailboxes are configured.
+Tools cover mailbox discovery, unified inbox and search, message reading, raw source, attachments, threads, labels, moves, drafts, replies and sending. `delete_message` moves mail to Trash by default. The server lists only tools permitted by the token's scopes. Per-mailbox tools take a `mailbox` argument containing the configured name or email address. See the [tool reference](https://github.com/psyb0t/docker-mailbox/blob/main/docs/api.md#mcp-server).
 
 ## Configuration
 
@@ -39,17 +25,18 @@ Install it into your OpenClaw agent from ClawHub:
 openclaw plugins install clawhub:@psyb0t/mailbox
 ```
 
-Then set `MAILBOX_URL` and `MAILBOX_TOKEN` in
-the plugin's environment.
+Set `MAILBOX_URL` and `MAILBOX_TOKEN` in the plugin's environment.
 
 For clients on the Docker host, publish mailboxd with `-p 127.0.0.1:8000:8000`. The image still listens on `0.0.0.0:8000` internally. Another container uses a shared-network URL such as `http://mailboxd:8000`; its `localhost` refers to itself. Remote clients need a deliberately reachable endpoint, preferably HTTPS, and the configured bearer token.
 
 ## Native remote MCP (no install)
 
-If your MCP client already supports **remote** Streamable-HTTP servers, you
-don't need this bridge — point the client straight at
-`$MAILBOX_URL/mcp` with an `Authorization: Bearer <token>` header.
+Clients with native streamable HTTP support can connect directly to `$MAILBOX_URL/mcp` with an `Authorization: Bearer <token>` header.
 
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Permissions and state
+
+Use a named token with explicit scopes and mailbox access. Read, draft and organize permissions can be granted without send or permanent-delete access. The bridge stores no mail. The server keeps operational state in SQLite and exposes admin-only webhook delivery inspection and replay. Mail and drafts remain on IMAP. Check send warnings before retrying.

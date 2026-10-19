@@ -32,13 +32,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH" \
     TZ=UTC \
-    LOG_LEVEL=INFO \
     WORKERS=2 \
-    MAILBOXD_CONFIG=/etc/mailboxd/config.yaml
+    MAILBOXD_CONFIG=/etc/mailboxd/config.yaml \
+    MAILBOXD_STATE_PATH=/var/lib/mailboxd/state.db
 
-RUN useradd --create-home --shell /bin/bash mailboxd \
-    && mkdir -p /etc/mailboxd \
-    && chown mailboxd:mailboxd /etc/mailboxd
+# /var/lib/mailboxd holds the SQLite state (audit log, send rate limits, checkpoints).
+# It must exist and be owned by the runtime user BEFORE the VOLUME instruction so a
+# fresh named volume inherits that ownership.
+RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin mailboxd \
+    && mkdir -p /etc/mailboxd /var/lib/mailboxd \
+    && chown mailboxd:mailboxd /etc/mailboxd /var/lib/mailboxd
 
 WORKDIR /app
 
@@ -48,9 +51,11 @@ COPY --chown=mailboxd:mailboxd pyproject.toml README.md ./
 
 USER mailboxd
 
+VOLUME ["/var/lib/mailboxd"]
+
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').status==200 else 1)" || exit 1
 
-CMD ["sh", "-c", "uvicorn --factory mailboxd.server:create_app --host 0.0.0.0 --port 8000 --workers ${WORKERS}"]
+CMD ["sh", "-c", "exec uvicorn --factory mailboxd.server:create_app --host 0.0.0.0 --port 8000 --workers ${WORKERS}"]

@@ -2,7 +2,7 @@
   "name": "@psyb0t/mailbox",
   "version": "0.0.0",
   "mcpName": "io.github.psyb0t/mailbox",
-  "description": "Connect an OpenClaw/MCP agent to a self-hosted docker-mailbox IMAP/SMTP control plane over MCP.",
+  "description": "Scoped IMAP/SMTP access over HTTP and MCP: read, organize, draft, reply and send mail.",
   "type": "module",
   "bin": {
     "mailbox-mcp": "bin/cli.js"
@@ -43,7 +43,9 @@
     "access": "public"
   },
   "openclaw": {
-    "extensions": ["./bin/cli.js"],
+    "extensions": [
+      "./bin/cli.js"
+    ],
     "compat": {
       "pluginApi": ">=2026.3.24-beta.2"
     },

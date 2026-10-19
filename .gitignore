@@ -72,6 +72,7 @@ pyrightconfig.json
 # Env files
 .env
 .env.*
+!.env.example
 .envrc
 
 # Credential material — defence in depth
@@ -91,6 +92,12 @@ AGENTS.md
 sec.sarif
 
 .testing/
+
+# Local operational state
+*.db
+*.db-wal
+*.db-shm
+.data/
 
 # Review receipt for the local release script.
 git-update.sh.debot

@@ -57,11 +57,16 @@ ANUSTIMES_*.md
 *.swo
 
 # Local scratch / research
+.plan/
 AGENTS.md
 CODEX.local.md
 .agent_notes/
 .agent_knowledge/
 .testing/
+*.db
+*.db-wal
+*.db-shm
+.data/
 .research_files
 *.local
 *.bak

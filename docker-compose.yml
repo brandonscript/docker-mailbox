@@ -1,21 +1,80 @@
+x-runtime: &runtime
+  init: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m,noexec,nosuid
+  mem_limit: 512m
+  cpus: 1
+  pids_limit: 256
+  deploy:
+    resources:
+      limits:
+        memory: 512M
+        cpus: "1.0"
+        pids: 256
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+  networks: [mailbox]
+  env_file: .env
+
 services:
   mailboxd:
+    <<: *runtime
     image: psyb0t/mailbox:latest
     build:
       context: .
     container_name: mailboxd
     restart: unless-stopped
     ports:
-      - "${PORT:-8000}:8000"
+      # Host-local by default. Drop the 127.0.0.1 prefix only for deliberate network access.
+      - "127.0.0.1:${PORT:-8000}:8000"
     environment:
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       WORKERS: ${WORKERS:-2}
       MAILBOXD_CONFIG: /etc/mailboxd/config.yaml
+      MAILBOXD_STATE_PATH: /var/lib/mailboxd/state.db
     volumes:
       - ${MAILBOXD_CONFIG:-./config.yaml}:/etc/mailboxd/config.yaml:ro
+      # Shared SQLite state includes queued webhook headers, never mail bodies.
+      - mailboxd-state:/var/lib/mailboxd
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').status==200 else 1)"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+
+  # Optional: IMAP IDLE watcher that POSTs HMAC-signed webhooks for new mail.
+  # Enable with: docker compose --profile watch up -d
+  # Configure targets under `watch.webhooks` in config.yaml.
+  watch:
+    <<: *runtime
+    image: psyb0t/mailbox:latest
+    build:
+      context: .
+    container_name: mailboxd-watch
+    profiles: ["watch"]
+    restart: unless-stopped
+    command: ["mailboxd", "watch", "--config", "/etc/mailboxd/config.yaml"]
+    environment:
+      MAILBOXD_CONFIG: /etc/mailboxd/config.yaml
+      MAILBOXD_STATE_PATH: /var/lib/mailboxd/state.db
+    volumes:
+      - ${MAILBOXD_CONFIG:-./config.yaml}:/etc/mailboxd/config.yaml:ro
+      - mailboxd-state:/var/lib/mailboxd
+    healthcheck:
+      test: ["CMD", "mailboxd", "watch-health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  mailboxd-state:
+
+networks:
+  mailbox:

@@ -6,6 +6,7 @@ DEV_IMAGE := psyb0t/mailboxd-dev:latest
 PYPROJECT := pyproject.toml
 BUMP_HOST := bash scripts/bump_exclude_newer.sh $(PYPROJECT)
 GROUP ?=
+TEST_ARGS ?=
 UV_GROUP := $(if $(GROUP),$(if $(filter dev,$(GROUP)),--group dev,$(error GROUP must be empty or dev)),)
 
 # Sandbox: everything dev-side runs INSIDE the dev image. The full env is
@@ -38,17 +39,36 @@ DEV_RUN_DIND := docker run --rm \
 	--group-add $(DOCKER_GID) \
 	-e HOME=/tmp \
 	-e TESTCONTAINERS_RYUK_DISABLED=true \
-	-v $(PWD):/work \
-	-w /work \
+	-e PYTHONPATH=$(PWD)/src \
+	-v $(PWD):$(PWD) \
+	-w $(PWD) \
 	-v $(DOCKER_SOCK):$(DOCKER_SOCK) \
 	$(DEV_IMAGE)
 
-.PHONY: help dev-image shell \
+.PHONY: help dev-image shell version build audit audit-compose test-coverage watch \
         pkg-lock pkg-upgrade pkg-add pkg-remove pkg-update \
         run test test-unit test-docker lint format sec clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+version: ## Print the canonical package version
+	@awk -F '"' '/^version = / {print $$2; exit}' pyproject.toml
+
+build: ## Build the production image locally
+	docker build -t psyb0t/mailbox:latest .
+
+audit: dev-image ## Check the frozen runtime and dev dependency graph for advisories
+	$(DEV_RUN) sh -ec 'uv lock --locked; uv export --frozen --all-groups --no-emit-project > /tmp/mailbox-requirements.txt; pip-audit --no-deps --disable-pip -r /tmp/mailbox-requirements.txt'
+
+audit-compose: dev-image ## Validate production isolation, resource and health defaults
+	$(DEV_RUN) python scripts/audit_compose.py
+
+test-coverage: build dev-image ## Run the complete suite with an 85 percent coverage floor
+	$(DEV_RUN_DIND) pytest --override-ini="addopts=-v --tb=short" --cov=mailboxd --cov-report=term-missing --cov-report=xml --cov-fail-under=85
+
+watch: dev-image ## Run the watcher using the configured SQLite path and webhook targets
+	$(DEV_RUN) python -m mailboxd.cli watch --config /work/config.yaml
 
 # -----------------------------------------------------------------------------
 # Dev container — every other target depends on this. Docker's layer cache
@@ -103,22 +123,22 @@ run: dev-image ## Run HTTP server (mounts CONFIG=path/to/config.yaml)
 		$(DEV_IMAGE) \
 		uvicorn --factory mailboxd.server:create_app --host 0.0.0.0 --port 8000
 
-test: dev-image ## Run ALL tests (unit + docker-in-docker integration)
+test: build dev-image ## Run ALL tests, including the production container
 	$(DEV_RUN_DIND) pytest --override-ini="addopts=-v --tb=short"
 
 test-unit: dev-image ## Run only in-process unit tests
-	$(DEV_RUN) pytest
+	$(DEV_RUN) pytest $(TEST_ARGS)
 
-test-docker: dev-image ## Run only the docker integration tests
+test-docker: build dev-image ## Run only the production container integration tests
 	$(DEV_RUN_DIND) pytest -m docker --override-ini="addopts=-v --tb=short"
 
 lint: dev-image ## Lint
-	$(DEV_RUN) flake8 src tests
-	$(DEV_RUN) mypy src
+	$(DEV_RUN) flake8 src tests scripts/audit_compose.py
+	$(DEV_RUN) mypy src scripts/audit_compose.py
 
 format: dev-image ## Format
-	$(DEV_RUN) isort src tests
-	$(DEV_RUN) black src tests
+	$(DEV_RUN) isort src tests scripts/audit_compose.py
+	$(DEV_RUN) black src tests scripts/audit_compose.py
 
 sec: dev-image ## Security scan (semgrep + bandit + pip-audit, parallel) -> sec.sarif for the Security tab; reports, never fails
 	$(DEV_RUN) bash scripts/sec.sh

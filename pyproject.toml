@@ -1,7 +1,7 @@
 [project]
 name = "mailboxd"
-version = "0.5.1"
-description = "Multi-mailbox IMAP/SMTP/POP3 control plane — HTTP API + MCP server."
+version = "0.6.0"
+description = "Multi-mailbox IMAP/SMTP control plane with scoped HTTP and MCP access."
 readme = "README.md"
 license = { text = "WTFPL" }
 requires-python = ">=3.12"
@@ -9,7 +9,6 @@ authors = [{ name = "psyb0t" }]
 keywords = [
     "imap",
     "smtp",
-    "pop3",
     "email",
     "mailbox",
     "fastapi",
@@ -32,9 +31,10 @@ dependencies = [
     "uvicorn[standard]==0.46.0",
     "pydantic==2.13.3",
     "pyyaml==6.0.3",
-    "mcp==1.28.1",
+    "mcp==1.30.0",
     "html2text==2024.2.26",
     "pyjwt==2.15.1",
+    "nh3==0.3.7",
 ]
 
 [project.urls]
@@ -56,6 +56,7 @@ dev = [
     "types-pyyaml==6.0.12.20240917",
     "testcontainers==4.14.2",
     "requests==2.34.0",
+    "urllib3==2.8.0",
 ]
 
 [build-system]
@@ -68,7 +69,7 @@ packages = ["src/mailboxd"]
 [tool.uv]
 # Supply-chain defense: only install pkg versions older than `exclude-newer`.
 # Refreshed by make pkg-* to UTC midnight seven days before the operation.
-exclude-newer = "2026-10-06T00:00:00Z"
+exclude-newer = "2026-10-12T00:00:00Z"
 
 [tool.isort]
 profile = "black"
