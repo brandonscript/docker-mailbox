@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.6.2
+
+- Header listings keep the UID, size and flags when the IMAP server sends them after the header literal, as Proton Bridge does. These messages previously came back with an empty UID. Reported and fixed by @dvanwinkle in issue #8.
+- Scheduled issue-mirror pulls run at a staggered time instead of a shared minute.
+
 ## v0.6.1
 
 - Tag pipelines wait for the same commit's successful `main` pipeline, then promote its multi-platform Docker image by digest instead of rebuilding or rerunning checks.

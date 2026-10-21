@@ -672,10 +672,23 @@ def search_messages(
 
 def _parse_header_fetch(fdata: list[Any]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
+    # imaplib returns attributes after a literal as a separate bytes item.
+    records: list[tuple[Any, Any]] = []
+    pending: int | None = None
     for item in fdata:
-        if not isinstance(item, tuple) or len(item) < 2:
-            continue
-        meta_raw, body_raw = item[0], item[1]
+        if isinstance(item, tuple) and len(item) >= 2:
+            records.append((item[0], item[1]))
+            pending = len(records) - 1
+        elif isinstance(item, bytes) and pending is not None:
+            # Never attach a separate numbered unsolicited FETCH response.
+            if re.match(rb"^\s*\d+\s+\(", item):
+                pending = None
+                continue
+            meta_raw, body_raw = records[pending]
+            if isinstance(meta_raw, bytes):
+                records[pending] = (meta_raw + b" " + item, body_raw)
+            pending = None
+    for meta_raw, body_raw in records:
         meta = (
             meta_raw.decode("utf-8", errors="replace")
             if isinstance(meta_raw, bytes)
