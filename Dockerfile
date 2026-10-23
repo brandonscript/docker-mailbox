@@ -39,7 +39,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # /var/lib/mailboxd holds the SQLite state (audit log, send rate limits, checkpoints).
 # It must exist and be owned by the runtime user BEFORE the VOLUME instruction so a
 # fresh named volume inherits that ownership.
-RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin mailboxd \
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m pip uninstall -y pip setuptools \
+    && useradd --uid 10001 --create-home --shell /usr/sbin/nologin mailboxd \
     && mkdir -p /etc/mailboxd /var/lib/mailboxd \
     && chown mailboxd:mailboxd /etc/mailboxd /var/lib/mailboxd
 

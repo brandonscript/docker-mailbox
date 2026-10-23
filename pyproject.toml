@@ -27,6 +27,8 @@ classifiers = [
     "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
 ]
 dependencies = [
+    # Security exception: remove compromised emSign intermediates (GHSA-6q48-6c7w-9gw2).
+    "certifi==2026.10.19",
     "fastapi==0.136.1",
     "uvicorn[standard]==0.46.0",
     "pydantic==2.13.3",
@@ -69,7 +71,9 @@ packages = ["src/mailboxd"]
 [tool.uv]
 # Supply-chain defense: only install pkg versions older than `exclude-newer`.
 # Refreshed by make pkg-* to UTC midnight seven days before the operation.
-exclude-newer = "2026-10-12T00:00:00Z"
+# The cutoff is advanced only for the security-pinned certifi update; other
+# versions remain frozen in uv.lock rather than being generally upgraded.
+exclude-newer = "2026-10-23T00:00:00Z"
 
 [tool.isort]
 profile = "black"
