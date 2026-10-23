@@ -189,6 +189,8 @@ class SendGuardConfig(BaseModel):
 
 
 class LimitsConfig(BaseModel):
+    # Raw RFC822 source fetched from IMAP, before MIME parsing or decoding.
+    incoming_message_max_bytes: int = Field(default=32 * 1024 * 1024, ge=1)
     request_max_bytes: int = Field(default=32 * 1024 * 1024, ge=128, le=128 * 1024 * 1024)
     attachment_max_bytes: int = Field(default=15 * 1024 * 1024, ge=1)
     # Total size of attachments added to an outgoing message.

@@ -26,6 +26,7 @@ from typing import Any
 
 from . import imap_client, mime
 from .config import Config, MailboxConfig, WebhookConfig
+from .errors import TooLarge
 from .imap_client import ImapError, Session
 from .state import State
 
@@ -279,7 +280,9 @@ def watch_mailbox(cfg: Config, state: State, mb: MailboxConfig, stop: threading.
     backoff = 1.0
     while not stop.is_set():
         try:
-            with imap_client.session(imap) as s:
+            with imap_client.session(
+                imap, incoming_message_max_bytes=cfg.limits.incoming_message_max_bytes
+            ) as s:
                 backoff = 1.0
                 log.info("watching mailbox", extra={"mailbox": mb.name, "idle": s.has("IDLE")})
                 while not stop.is_set():
@@ -287,7 +290,7 @@ def watch_mailbox(cfg: Config, state: State, mb: MailboxConfig, stop: threading.
                     if stop.is_set():
                         break
                     _wait(s, cfg, stop)
-        except (ImapError, OSError, imaplib.IMAP4.error) as e:
+        except (TooLarge, ImapError, OSError, imaplib.IMAP4.error) as e:
             log.warning(
                 "watch connection failed",
                 extra={

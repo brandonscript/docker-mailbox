@@ -14,7 +14,7 @@ from email.utils import getaddresses
 from typing import Any
 
 from . import imap_client, mime, smtp_client
-from .config import ImapConfig, MailboxConfig
+from .config import ImapConfig, LimitsConfig, MailboxConfig
 from .errors import Conflict
 from .imap_client import ImapError, Session
 from .principal import Principal
@@ -88,13 +88,18 @@ def _date_key(m: dict[str, Any]) -> float:
 
 
 def thread(
-    svc: Any, p: Principal, mb: MailboxConfig, uid: str, folder: str | None
+    svc: Any,
+    p: Principal,
+    mb: MailboxConfig,
+    uid: str,
+    folder: str | None,
+    incoming_message_max_bytes: int = LimitsConfig().incoming_message_max_bytes,
 ) -> dict[str, Any]:
     """The conversation a message belongs to, across its folder and Sent."""
     imap = _imap(mb)
     folder = folder or imap.default_folder
     found: dict[str, dict[str, Any]] = {}
-    with imap_client.session(imap) as s:
+    with imap_client.session(imap, incoming_message_max_bytes=incoming_message_max_bytes) as s:
         s.select(folder, readonly=True)
         head = s.fetch_message(uid, header_only=True)
         root, ids = _id_set(head)
@@ -213,14 +218,19 @@ def _thread_entry(group: list[dict[str, Any]], sent: str | None) -> dict[str, An
 
 
 def threads(
-    svc: Any, p: Principal, mb: MailboxConfig, folder: str | None, limit: int
+    svc: Any,
+    p: Principal,
+    mb: MailboxConfig,
+    folder: str | None,
+    limit: int,
+    incoming_message_max_bytes: int = LimitsConfig().incoming_message_max_bytes,
 ) -> dict[str, Any]:
     """Recent conversations, grouped locally from the newest headers."""
     imap = _imap(mb)
     folder = folder or imap.default_folder
     limit = max(0, limit)
     count = min(MAX_SCAN, max(limit * 4, 1))
-    with imap_client.session(imap) as s:
+    with imap_client.session(imap, incoming_message_max_bytes=incoming_message_max_bytes) as s:
         messages = _scan(s, folder, count)
         sent = _sent_folder(s, mb)
         if sent and sent != folder:

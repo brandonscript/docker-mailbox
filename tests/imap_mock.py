@@ -407,7 +407,8 @@ def _parse_all(tokens: list[Any]) -> list[Any]:
 # ── handler ──────────────────────────────────────────────────────────────
 
 _FETCH_ITEM_RE = re.compile(
-    r"BODY(?:\.PEEK)?\[[^\]]*\]|BODYSTRUCTURE|RFC822\.SIZE|RFC822\.HEADER|RFC822|FLAGS|UID"
+    r"BODY(?:\.PEEK)?\[[^\]]*\](?:<\d+\.\d+>)?|BODYSTRUCTURE"
+    r"|RFC822\.SIZE|RFC822\.HEADER|RFC822|FLAGS|UID"
     r"|INTERNALDATE|ENVELOPE",
     re.I,
 )
@@ -729,7 +730,7 @@ def _make_handler(sink: Sink) -> type[socketserver.StreamRequestHandler]:
                     literals.append(("RFC822.HEADER", _header_block(raw, None)))
                 elif up.startswith("BODY"):
                     peek = up.startswith("BODY.PEEK")
-                    section = item[item.index("[") + 1 : -1]
+                    section = item[item.index("[") + 1 : item.index("]")]
                     label = f"BODY[{section}]"
                     if not peek and not self.readonly:
                         flags.add("\\Seen")
@@ -746,6 +747,11 @@ def _make_handler(sink: Sink) -> type[socketserver.StreamRequestHandler]:
                         literals.append((label, _split_headers(raw)[1]))
                     else:
                         literals.append((label, b""))
+                    partial = re.search(r"<(\d+)\.(\d+)>$", item)
+                    if partial:
+                        offset, count = map(int, partial.groups())
+                        label, body = literals[-1]
+                        literals[-1] = (f"{label}<{offset}>", body[offset : offset + count])
             if flags != before and self.readonly:
                 flags.clear()
                 flags.update(before)

@@ -119,7 +119,7 @@ def fake(monkeypatch: pytest.MonkeyPatch) -> FakeSession:
     s = FakeSession()
 
     @contextmanager
-    def sess(cfg: ImapConfig) -> Iterator[FakeSession]:
+    def sess(cfg: ImapConfig, **kwargs: Any) -> Iterator[FakeSession]:
         yield s
 
     monkeypatch.setattr(imap_client, "session", sess)

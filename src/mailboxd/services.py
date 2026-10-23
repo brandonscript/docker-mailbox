@@ -130,7 +130,10 @@ class Service:
         return mb.smtp
 
     def _session(self, mb: MailboxConfig) -> Any:
-        return imap_client.session(self._imap(mb))
+        return imap_client.session(
+            self._imap(mb),
+            incoming_message_max_bytes=self.cfg.limits.incoming_message_max_bytes,
+        )
 
     def _log(
         self,
@@ -234,7 +237,10 @@ class Service:
         so a reset never skips mail.
         """
         imap = self._imap(mb)
-        kw: dict[str, Any] = {"has_attachments": has_attachments}
+        kw: dict[str, Any] = {
+            "has_attachments": has_attachments,
+            "incoming_message_max_bytes": self.cfg.limits.incoming_message_max_bytes,
+        }
         pos = after or before
         page = imap_client.search_page(
             imap,
@@ -253,6 +259,7 @@ class Service:
                 criteria=spec,
                 after_uid=0 if follow else None,
                 has_attachments=has_attachments,
+                incoming_message_max_bytes=self.cfg.limits.incoming_message_max_bytes,
             )
             return page, True
         return page, False
@@ -544,7 +551,14 @@ class Service:
         self._imap(mb)
         from . import insights
 
-        out: dict[str, Any] = insights.thread(self, p, mb, uid, folder)
+        out: dict[str, Any] = insights.thread(
+            self,
+            p,
+            mb,
+            uid,
+            folder,
+            incoming_message_max_bytes=self.cfg.limits.incoming_message_max_bytes,
+        )
         return out
 
     def threads(
@@ -555,7 +569,14 @@ class Service:
         self._imap(mb)
         from . import insights
 
-        out: dict[str, Any] = insights.threads(self, p, mb, folder, limit)
+        out: dict[str, Any] = insights.threads(
+            self,
+            p,
+            mb,
+            folder,
+            limit,
+            incoming_message_max_bytes=self.cfg.limits.incoming_message_max_bytes,
+        )
         return out
 
     def stats(self, p: Principal, mailbox: str) -> dict[str, Any]:
@@ -1018,7 +1039,13 @@ class Service:
         imap = self._imap(mb)
         with self._session(mb) as s:
             folder = self._drafts_folder(s, mb)
-        page = imap_client.search_page(imap, folder=folder, limit=limit, criteria="ALL")
+        page = imap_client.search_page(
+            imap,
+            folder=folder,
+            limit=limit,
+            criteria="ALL",
+            incoming_message_max_bytes=self.cfg.limits.incoming_message_max_bytes,
+        )
         return {"messages": self._tag(mb, page), "folder": folder}
 
     def _read_draft(self, mb: MailboxConfig, uid: str) -> tuple[str, bytes]:

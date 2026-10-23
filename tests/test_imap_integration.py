@@ -90,8 +90,8 @@ def test_fetch_message_parses_body(imap_factory: Factory) -> None:
     out = fetch_message(_cfg(host, port), uid="1")
     assert out["subject"] == "Hello"
     assert "hello from the mock imap server" in (out["body_text"] or "")
-    assert any("UID FETCH 1 (BODY.PEEK[])" in c for c in sink.commands)
-    assert not any("RFC822" in c for c in sink.commands)
+    assert any("UID FETCH 1 (BODY.PEEK[]<0.33554433>)" in c for c in sink.commands)
+    assert any("UID FETCH 1 (RFC822.SIZE)" in c for c in sink.commands)
 
 
 def test_search_messages_structured(imap_factory: Factory) -> None:

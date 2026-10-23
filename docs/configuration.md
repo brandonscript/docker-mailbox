@@ -75,12 +75,28 @@ A token entry is either a mapping `{name, token, scopes, mailboxes, dry_run}` or
 ```yaml
 send_guard: { dry_run: false, per_hour: 30 }   # rolling hour, per mailbox AND per token; 0 = unlimited
 limits:
+  incoming_message_max_bytes: 33554432         # raw IMAP source before parsing (32 MiB)
   request_max_bytes: 33554432                 # maximum HTTP/MCP request body
   attachment_max_bytes: 15728640               # largest attachment served
   outgoing_attachments_max_bytes: 20971520     # total attachments on one outgoing message
   mcp_inline_max_bytes: 524288                 # raw source / base64 attachment returned inline over MCP
 labels: { suspect: $Suspect, a_traiter: $ATraiter, fait: $Fait }   # friendly name -> IMAP keyword
 ```
+
+`limits.incoming_message_max_bytes` caps raw RFC822 messages before MIME parsing,
+body conversion, or attachment decoding. Reads, raw source, attachment retrieval,
+threads, replies, and existing-draft operations share this limit. Oversized messages
+return `413 too_large` (the same code in MCP). The client checks `RFC822.SIZE`
+before downloading a full message, then requests at most the limit plus one byte with `BODY.PEEK`
+to detect an incorrect size. Missing sizes and inconsistent/truncated responses
+fail closed. Header-only reads and watcher notifications apply the budget to
+the fetched headers, allowing messages with large attachments. Header-only listings use capped partial fetches too; they remain available for
+oversized messages whose selected headers fit the budget.
+The setting must be positive; increasing it increases memory use. This bounds
+requests to a conforming IMAP server; it does not cap imaplib's socket buffering
+if a malicious server ignores the requested partial range. The watcher retries
+pathological oversized headers with backoff and retains its cursor; operators must
+raise the budget or remove the offending message to resume notifications.
 
 `smtp.per_hour` overrides `send_guard.per_hour` for one mailbox. Labels are plain IMAP keywords: the friendly names are what you pass to `set_labels` and the `label` search filter (plus the built-in `flagged`).
 

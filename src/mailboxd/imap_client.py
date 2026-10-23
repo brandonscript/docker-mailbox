@@ -27,7 +27,8 @@ from typing import Any, Iterator, cast
 import html2text
 
 from . import mime
-from .config import FoldersConfig, ImapConfig, MailboxConfig
+from .config import FoldersConfig, ImapConfig, LimitsConfig, MailboxConfig
+from .errors import TooLarge
 
 log = logging.getLogger(__name__)
 
@@ -193,7 +194,15 @@ def _parse_list_line(raw: Any) -> dict[str, Any] | None:
 class Session:
     """One authenticated IMAP connection."""
 
-    def __init__(self, conn: imaplib.IMAP4, cfg: ImapConfig) -> None:
+    def __init__(
+        self,
+        conn: imaplib.IMAP4,
+        cfg: ImapConfig,
+        incoming_message_max_bytes: int = LimitsConfig().incoming_message_max_bytes,
+    ) -> None:
+        if incoming_message_max_bytes < 1:
+            raise ValueError("incoming_message_max_bytes must be positive")
+        self.incoming_message_max_bytes = incoming_message_max_bytes
         self.conn = conn
         self.cfg = cfg
         self._caps: set[str] | None = None
@@ -301,10 +310,16 @@ class Session:
         typ, fdata = self.conn.uid(
             "FETCH",
             uid_set(uids),
-            f"(BODY.PEEK[HEADER.FIELDS ({_HEADER_FIELDS})] FLAGS RFC822.SIZE)",
+            f"(BODY.PEEK[HEADER.FIELDS ({_HEADER_FIELDS})]"
+            f"<0.{self.incoming_message_max_bytes + 1}> FLAGS RFC822.SIZE)",
         )
         if typ != "OK":
             raise ImapError("FETCH headers failed")
+        for _, raw in _literal_records(fdata):
+            if isinstance(raw, bytes) and len(raw) > self.incoming_message_max_bytes:
+                raise TooLarge(
+                    "incoming headers exceed the size limit", limit=self.incoming_message_max_bytes
+                )
         parsed = _parse_header_fetch(fdata)
         order = {str(u): i for i, u in enumerate(uids)}
         parsed.sort(key=lambda m: order.get(str(m.get("uid")), 0))
@@ -331,14 +346,47 @@ class Session:
         return out
 
     def fetch_raw(self, uid: str, header_only: bool = False) -> bytes:
-        _validate_uid(uid)
+        # A raw read has exactly one result. Refuse sets rather than applying
+        # a per-message budget to an arbitrarily large multi-message fetch.
+        if not re.fullmatch(r"[1-9][0-9]*", uid):
+            raise ImapError(f"invalid uid for message read: {uid!r}")
+        limit = self.incoming_message_max_bytes
+        typ, data = self.conn.uid("FETCH", uid, "(RFC822.SIZE)")
+        if typ != "OK" or not data:
+            raise ImapError(f"could not fetch size for UID {uid}")
+        size = None
+        for item in data:
+            if not isinstance(item, bytes):
+                continue
+            # Match the requested UID, ignoring unrelated unsolicited FETCHes.
+            if _extract(item.decode("ascii", "replace"), "UID") != uid:
+                continue
+            value = _extract(item.decode("ascii", "replace"), "RFC822.SIZE")
+            if re.fullmatch(r"[0-9]+", value):
+                size = int(value)
+                break
+        if size is None:
+            raise ImapError(f"message UID {uid} size unavailable in {self.selected!r}")
+        # Header-only reads stay useful for messages with large attachments.
+        if not header_only and size > limit:
+            raise TooLarge("incoming message exceeds the size limit", limit=limit, size=size)
+
         section = "BODY.PEEK[HEADER]" if header_only else "BODY.PEEK[]"
-        typ, data = self.conn.uid("FETCH", uid, f"({section})")
+        # Fetch one extra byte to detect stale or incorrect advertised sizes.
+        # Never request an unbounded literal, even after a successful preflight.
+        typ, data = self.conn.uid("FETCH", uid, f"({section}<0.{limit + 1}>)")
         if typ != "OK" or not data:
             raise ImapError(f"could not fetch UID {uid}")
-        for item in data:
-            if isinstance(item, tuple) and len(item) >= 2 and isinstance(item[1], bytes):
-                return item[1]
+        for meta, raw in _literal_records(data):
+            if not isinstance(meta, bytes) or not isinstance(raw, bytes):
+                continue
+            if _extract(meta.decode("ascii", "replace"), "UID") == uid:
+                if len(raw) > limit:
+                    raise TooLarge("incoming message exceeds the size limit", limit=limit)
+                # Do not parse a silently truncated message from an inconsistent server.
+                if not header_only and len(raw) != size:
+                    raise ImapError(f"message UID {uid} size changed during fetch")
+                return raw
         raise ImapError(f"message UID {uid} not found in {self.selected!r}")
 
     def fetch_message(self, uid: str, header_only: bool = False) -> Message:
@@ -448,9 +496,12 @@ class Session:
 
 
 @contextmanager
-def session(cfg: ImapConfig) -> Iterator[Session]:
+def session(
+    cfg: ImapConfig,
+    incoming_message_max_bytes: int = LimitsConfig().incoming_message_max_bytes,
+) -> Iterator[Session]:
     with _connect(cfg) as conn:
-        yield Session(conn, cfg)
+        yield Session(conn, cfg, incoming_message_max_bytes=incoming_message_max_bytes)
 
 
 def special_folder(cfg: ImapConfig, folders: FoldersConfig, kind: str) -> str:
@@ -585,6 +636,7 @@ def search_page(
     before_uid: int | None = None,
     after_uid: int | None = None,
     has_attachments: bool | None = None,
+    incoming_message_max_bytes: int = LimitsConfig().incoming_message_max_bytes,
 ) -> dict[str, Any]:
     """One page of matches, newest first.
 
@@ -598,7 +650,7 @@ def search_page(
     _reject_control_chars(folder, "folder")
     if isinstance(criteria, str):
         _reject_control_chars(criteria, "search")
-    with session(cfg) as s:
+    with session(cfg, incoming_message_max_bytes=incoming_message_max_bytes) as s:
         uidvalidity = s.select(folder, readonly=True)
         uids = s.search(criteria)
         max_uid = uids[-1] if uids else (after_uid or 0)
@@ -670,8 +722,7 @@ def search_messages(
     return search_page(cfg, folder=folder, limit=limit, criteria=spec)["messages"]
 
 
-def _parse_header_fetch(fdata: list[Any]) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
+def _literal_records(fdata: list[Any]) -> list[tuple[Any, Any]]:
     # imaplib returns attributes after a literal as a separate bytes item.
     records: list[tuple[Any, Any]] = []
     pending: int | None = None
@@ -688,7 +739,12 @@ def _parse_header_fetch(fdata: list[Any]) -> list[dict[str, Any]]:
             if isinstance(meta_raw, bytes):
                 records[pending] = (meta_raw + b" " + item, body_raw)
             pending = None
-    for meta_raw, body_raw in records:
+    return records
+
+
+def _parse_header_fetch(fdata: list[Any]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for meta_raw, body_raw in _literal_records(fdata):
         meta = (
             meta_raw.decode("utf-8", errors="replace")
             if isinstance(meta_raw, bytes)
